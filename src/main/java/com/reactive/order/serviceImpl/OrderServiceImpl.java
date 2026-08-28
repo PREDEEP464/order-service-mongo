@@ -1,0 +1,385 @@
+package com.reactive.order.serviceImpl;
+
+import com.reactive.order.client.product.ProductServiceClient;
+import com.reactive.order.dao.api.OrderRepository;
+import com.reactive.order.exception.OrderNotFoundException;
+import com.reactive.order.model.entity.Order;
+import com.reactive.order.model.entity.OrderStatus;
+import com.reactive.order.model.entity.request.OrderRequest;
+import com.reactive.order.model.entity.response.OrderResponse;
+import com.reactive.order.model.response.ProductResponse;
+import com.reactive.order.service.OrderService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Service
+@RequiredArgsConstructor
+public class OrderServiceImpl implements OrderService {
+
+    private final OrderRepository orderRepository;
+    private final ProductServiceClient productServiceClient;
+
+    @Override
+    public Mono<OrderResponse> createOrder(OrderRequest request) {
+
+        return Mono.defer(() ->
+                        productServiceClient.getProductById(request.getProductId())
+                )
+                .filter(product -> Boolean.TRUE.equals(product.getIsActive()))
+                .switchIfEmpty(
+                        Mono.error(
+                                new IllegalArgumentException(
+                                        "Product not found or inactive: "
+                                                + request.getProductId()
+                                )
+                        )
+                )
+                .filter(product ->
+                        product.getAvailableQuantity() >= request.getQuantity()
+                )
+                .switchIfEmpty(
+                        Mono.error(
+                                new IllegalArgumentException(
+                                        "Insufficient product quantity"
+                                )
+                        )
+                )
+                .flatMap(product ->
+                        productServiceClient
+                                .reserveProduct(
+                                        request.getProductId(),
+                                        request.getQuantity()
+                                )
+                                .map(reservedProduct ->
+                                        buildOrder(request, reservedProduct)
+                                )
+                )
+                .flatMap(orderRepository::save)
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Order created successfully: " + order.getId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while creating order: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Flux<OrderResponse> getAllOrders() {
+
+        return orderRepository.findAll()
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Order fetched: " + order.getId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while fetching orders: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Mono<OrderResponse> getOrderById(String id) {
+
+        return orderRepository.findById(id)
+                .switchIfEmpty(
+                        Mono.error(
+                                new OrderNotFoundException(
+                                        "Order not found with id: " + id
+                                )
+                        )
+                )
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Order fetched: " + order.getId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while fetching order: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Mono<OrderResponse> updateOrder(
+            String id,
+            OrderRequest request) {
+
+        return orderRepository.findById(id)
+                .switchIfEmpty(
+                        Mono.error(
+                                new OrderNotFoundException(
+                                        "Order not found with id: " + id
+                                )
+                        )
+                )
+                .flatMap(existingOrder ->
+                        productServiceClient.getProductById(
+                                        request.getProductId()
+                                )
+                                .filter(product ->
+                                        Boolean.TRUE.equals(
+                                                product.getIsActive()
+                                        )
+                                )
+                                .switchIfEmpty(
+                                        Mono.error(
+                                                new IllegalArgumentException(
+                                                        "Product not found or inactive"
+                                                )
+                                        )
+                                )
+                                .filter(product ->
+                                        product.getAvailableQuantity()
+                                                >= request.getQuantity()
+                                )
+                                .switchIfEmpty(
+                                        Mono.error(
+                                                new IllegalArgumentException(
+                                                        "Insufficient product quantity"
+                                                )
+                                        )
+                                )
+                                .flatMap(product ->
+                                        productServiceClient.reserveProduct(
+                                                request.getProductId(),
+                                                request.getQuantity()
+                                        )
+                                )
+                                .map(product -> {
+                                    existingOrder.setProductId(
+                                            request.getProductId()
+                                    );
+                                    existingOrder.setQuantity(
+                                            request.getQuantity()
+                                    );
+                                    existingOrder.setUnitPrice(
+                                            product.getPrice()
+                                    );
+                                    existingOrder.setTotalAmount(
+                                            product.getPrice()
+                                                    .multiply(
+                                                            BigDecimal.valueOf(
+                                                                    request.getQuantity()
+                                                            )
+                                                    )
+                                    );
+                                    existingOrder.setUpdatedAt(
+                                            LocalDateTime.now()
+                                    );
+
+                                    return existingOrder;
+                                })
+                )
+                .flatMap(orderRepository::save)
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Order updated: " + order.getId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while updating order: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Mono<Void> cancelOrder(String id) {
+
+        return orderRepository.findById(id)
+                .switchIfEmpty(
+                        Mono.error(
+                                new OrderNotFoundException(
+                                        "Order not found with id: " + id
+                                )
+                        )
+                )
+                .filter(order ->
+                        order.getStatus() == OrderStatus.RESERVED
+                                || order.getStatus()
+                                == OrderStatus.PAYMENT_PENDING
+                )
+                .switchIfEmpty(
+                        Mono.error(
+                                new IllegalStateException(
+                                        "Order cannot be cancelled in its current state"
+                                )
+                        )
+                )
+                .flatMap(order ->
+                        productServiceClient.releaseProduct(
+                                        order.getProductId(),
+                                        order.getQuantity()
+                                )
+                                .thenReturn(order)
+                )
+                .flatMap(order -> {
+                    order.setStatus(OrderStatus.CANCELLED);
+                    order.setUpdatedAt(LocalDateTime.now());
+
+                    return orderRepository.save(order);
+                })
+                .then()
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while cancelling order: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Mono<OrderResponse> confirmOrder(String id) {
+
+        return orderRepository.findById(id)
+                .switchIfEmpty(
+                        Mono.error(
+                                new OrderNotFoundException(
+                                        "Order not found with id: " + id
+                                )
+                        )
+                )
+                .filter(order ->
+                        order.getStatus()
+                                == OrderStatus.PAYMENT_PENDING
+                )
+                .switchIfEmpty(
+                        Mono.error(
+                                new IllegalStateException(
+                                        "Order cannot be confirmed in its current state"
+                                )
+                        )
+                )
+                .flatMap(order -> {
+                    order.setStatus(OrderStatus.CONFIRMED);
+                    order.setUpdatedAt(LocalDateTime.now());
+
+                    return orderRepository.save(order);
+                })
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Order confirmed: " + order.getId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while confirming order: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Mono<OrderResponse> markPaymentFailed(String id) {
+
+        return orderRepository.findById(id)
+                .switchIfEmpty(
+                        Mono.error(
+                                new OrderNotFoundException(
+                                        "Order not found with id: " + id
+                                )
+                        )
+                )
+                .filter(order ->
+                        order.getStatus()
+                                == OrderStatus.PAYMENT_PENDING
+                )
+                .switchIfEmpty(
+                        Mono.error(
+                                new IllegalStateException(
+                                        "Payment cannot be failed for this order"
+                                )
+                        )
+                )
+                .flatMap(order ->
+                        productServiceClient
+                                .releaseProduct(
+                                        order.getProductId(),
+                                        order.getQuantity()
+                                )
+                                .thenReturn(order)
+                )
+                .flatMap(order -> {
+                    order.setStatus(OrderStatus.PAYMENT_FAILED);
+                    order.setUpdatedAt(LocalDateTime.now());
+
+                    return orderRepository.save(order);
+                })
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Payment failed for order: "
+                                        + order.getId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while marking payment failed: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    private Order buildOrder(
+            OrderRequest request,
+            ProductResponse product) {
+
+        BigDecimal totalAmount =
+                product.getPrice()
+                        .multiply(
+                                BigDecimal.valueOf(
+                                        request.getQuantity()
+                                )
+                        );
+
+        LocalDateTime now = LocalDateTime.now();
+
+        Order order = new Order();
+
+        order.setProductId(request.getProductId());
+        order.setQuantity(request.getQuantity());
+        order.setUnitPrice(product.getPrice());
+        order.setTotalAmount(totalAmount);
+        order.setStatus(OrderStatus.PAYMENT_PENDING);
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
+
+        return order;
+    }
+
+    private OrderResponse convertToResponse(Order order) {
+
+        return new OrderResponse(
+                order.getId(),
+                order.getProductId(),
+                order.getQuantity(),
+                order.getUnitPrice(),
+                order.getTotalAmount(),
+                order.getStatus(),
+                order.getPaymentId(),
+                order.getCreatedAt(),
+                order.getUpdatedAt()
+        );
+    }
+}
