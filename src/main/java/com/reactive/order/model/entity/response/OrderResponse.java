@@ -15,6 +15,8 @@ public class OrderResponse {
 
     private String id;
 
+    private String customerName;
+
     private Long productId;
 
     private Integer quantity;

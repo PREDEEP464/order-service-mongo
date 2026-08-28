@@ -13,8 +13,6 @@ public interface OrderService {
 
     Mono<OrderResponse> getOrderById(String id);
 
-    Mono<OrderResponse> updateOrder(String id, OrderRequest request);
-
     Mono<Void> cancelOrder(String id);
 
     Mono<OrderResponse> confirmOrder(String id);

@@ -56,22 +56,6 @@ public class OrderController {
                 );
     }
 
-    @PutMapping("/{id}")
-    public Mono<ResponseEntity<ApiResponse<OrderResponse>>> updateOrder(
-            @PathVariable String id,
-            @Valid @RequestBody OrderRequest request) {
-
-        return orderService.updateOrder(id, request)
-                .map(order ->
-                        ResponseEntity.ok(
-                                new ApiResponse<>(
-                                        "Order updated successfully",
-                                        order
-                                )
-                        )
-                );
-    }
-
     @PatchMapping("/{id}/cancel")
     public Mono<ResponseEntity<ApiResponse<Void>>> cancelOrder(
             @PathVariable String id) {

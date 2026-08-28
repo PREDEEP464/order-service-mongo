@@ -118,92 +118,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public Mono<OrderResponse> updateOrder(
-            String id,
-            OrderRequest request) {
-
-        return orderRepository.findById(id)
-                .switchIfEmpty(
-                        Mono.error(
-                                new OrderNotFoundException(
-                                        "Order not found with id: " + id
-                                )
-                        )
-                )
-                .flatMap(existingOrder ->
-                        productServiceClient.getProductById(
-                                        request.getProductId()
-                                )
-                                .filter(product ->
-                                        Boolean.TRUE.equals(
-                                                product.getIsActive()
-                                        )
-                                )
-                                .switchIfEmpty(
-                                        Mono.error(
-                                                new IllegalArgumentException(
-                                                        "Product not found or inactive"
-                                                )
-                                        )
-                                )
-                                .filter(product ->
-                                        product.getAvailableQuantity()
-                                                >= request.getQuantity()
-                                )
-                                .switchIfEmpty(
-                                        Mono.error(
-                                                new IllegalArgumentException(
-                                                        "Insufficient product quantity"
-                                                )
-                                        )
-                                )
-                                .flatMap(product ->
-                                        productServiceClient.reserveProduct(
-                                                request.getProductId(),
-                                                request.getQuantity()
-                                        )
-                                )
-                                .map(product -> {
-                                    existingOrder.setProductId(
-                                            request.getProductId()
-                                    );
-                                    existingOrder.setQuantity(
-                                            request.getQuantity()
-                                    );
-                                    existingOrder.setUnitPrice(
-                                            product.getPrice()
-                                    );
-                                    existingOrder.setTotalAmount(
-                                            product.getPrice()
-                                                    .multiply(
-                                                            BigDecimal.valueOf(
-                                                                    request.getQuantity()
-                                                            )
-                                                    )
-                                    );
-                                    existingOrder.setUpdatedAt(
-                                            LocalDateTime.now()
-                                    );
-
-                                    return existingOrder;
-                                })
-                )
-                .flatMap(orderRepository::save)
-                .map(this::convertToResponse)
-                .doOnNext(order ->
-                        System.out.println(
-                                "Order updated: " + order.getId()
-                        )
-                )
-                .doOnError(error ->
-                        System.err.println(
-                                "Error while updating order: "
-                                        + error.getMessage()
-                        )
-                );
-    }
-
-    @Override
     public Mono<Void> cancelOrder(String id) {
 
         return orderRepository.findById(id)
@@ -357,6 +271,7 @@ public class OrderServiceImpl implements OrderService {
 
         Order order = new Order();
 
+        order.setCustomerName(request.getCustomerName());
         order.setProductId(request.getProductId());
         order.setQuantity(request.getQuantity());
         order.setUnitPrice(product.getPrice());
@@ -372,6 +287,7 @@ public class OrderServiceImpl implements OrderService {
 
         return new OrderResponse(
                 order.getId(),
+                order.getCustomerName(),
                 order.getProductId(),
                 order.getQuantity(),
                 order.getUnitPrice(),
