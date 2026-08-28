@@ -118,7 +118,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public Mono<Void> cancelOrder(String id) {
+    public Mono<OrderResponse> cancelOrder(String id) {
 
         return orderRepository.findById(id)
                 .switchIfEmpty(
@@ -128,32 +128,26 @@ public class OrderServiceImpl implements OrderService {
                                 )
                         )
                 )
-                .filter(order ->
-                        order.getStatus() == OrderStatus.RESERVED
-                                || order.getStatus()
-                                == OrderStatus.PAYMENT_PENDING
-                )
-                .switchIfEmpty(
-                        Mono.error(
-                                new IllegalStateException(
-                                        "Order cannot be cancelled in its current state"
-                                )
-                        )
-                )
                 .flatMap(order ->
                         productServiceClient.releaseProduct(
                                         order.getProductId(),
                                         order.getQuantity()
                                 )
-                                .thenReturn(order)
-                )
-                .flatMap(order -> {
-                    order.setStatus(OrderStatus.CANCELLED);
-                    order.setUpdatedAt(LocalDateTime.now());
+                                .then(
+                                        Mono.defer(() -> {
+                                            order.setStatus(OrderStatus.CANCELLED);
+                                            order.setUpdatedAt(LocalDateTime.now());
 
-                    return orderRepository.save(order);
-                })
-                .then()
+                                            return orderRepository.save(order);
+                                        })
+                                )
+                )
+                .map(this::convertToResponse)
+                .doOnNext(order ->
+                        System.out.println(
+                                "Order cancelled: " + order.getId()
+                        )
+                )
                 .doOnError(error ->
                         System.err.println(
                                 "Error while cancelling order: "

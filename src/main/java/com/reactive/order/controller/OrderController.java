@@ -57,15 +57,15 @@ public class OrderController {
     }
 
     @PatchMapping("/{id}/cancel")
-    public Mono<ResponseEntity<ApiResponse<Void>>> cancelOrder(
+    public Mono<ResponseEntity<ApiResponse<OrderResponse>>> cancelOrder(
             @PathVariable String id) {
 
         return orderService.cancelOrder(id)
-                .thenReturn(
+                .map(order ->
                         ResponseEntity.ok(
                                 new ApiResponse<>(
                                         "Order cancelled successfully",
-                                        null
+                                        order
                                 )
                         )
                 );
