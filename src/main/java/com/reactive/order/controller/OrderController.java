@@ -9,8 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -36,9 +36,18 @@ public class OrderController {
     }
 
     @GetMapping
-    public Flux<OrderResponse> getAllOrders() {
+    public Mono<ResponseEntity<ApiResponse<List<OrderResponse>>>> getAllOrders() {
 
-        return orderService.getAllOrders();
+        return orderService.getAllOrders()
+                .collectList()
+                .map(orders ->
+                        ResponseEntity.ok(
+                                new ApiResponse<>(
+                                        "Orders fetched successfully",
+                                        orders
+                                )
+                        )
+                );
     }
 
     @GetMapping("/{id}")

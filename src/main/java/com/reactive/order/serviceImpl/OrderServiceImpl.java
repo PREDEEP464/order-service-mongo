@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -29,12 +29,23 @@ public class OrderServiceImpl implements OrderService {
 
         return Mono.defer(() ->
                         productServiceClient.getProductById(request.getProductId())
+                                .onErrorResume(
+                                        WebClientResponseException.NotFound.class,
+                                        ex -> Mono.error(
+                                                new IllegalArgumentException(
+                                                        "No available product with ID: "
+                                                                + request.getProductId()
+                                                )
+                                        )
+                                )
                 )
-                .filter(product -> Boolean.TRUE.equals(product.getIsActive()))
+                .filter(product ->
+                        Boolean.TRUE.equals(product.getIsActive())
+                )
                 .switchIfEmpty(
                         Mono.error(
                                 new IllegalArgumentException(
-                                        "Product not found or inactive: "
+                                        "No available product with ID: "
                                                 + request.getProductId()
                                 )
                         )
@@ -45,7 +56,8 @@ public class OrderServiceImpl implements OrderService {
                 .switchIfEmpty(
                         Mono.error(
                                 new IllegalArgumentException(
-                                        "Insufficient product quantity"
+                                        "Insufficient product quantity for product ID: "
+                                                + request.getProductId()
                                 )
                         )
                 )
