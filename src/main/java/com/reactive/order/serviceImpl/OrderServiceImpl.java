@@ -346,7 +346,6 @@ public class OrderServiceImpl implements OrderService {
                 order.getUnitPrice(),
                 order.getTotalAmount(),
                 order.getStatus(),
-                order.getPaymentId(),
                 order.getCreatedAt(),
                 order.getUpdatedAt()
         );

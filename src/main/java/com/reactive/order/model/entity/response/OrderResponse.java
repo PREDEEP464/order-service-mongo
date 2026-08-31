@@ -27,8 +27,6 @@ public class OrderResponse {
 
     private OrderStatus status;
 
-    private String paymentId;
-
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
