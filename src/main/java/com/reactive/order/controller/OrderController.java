@@ -68,11 +68,19 @@ public class OrderController {
     }
 
     @GetMapping("/{id}/stream")
-    public Flux<OrderResponse> getOrderAsFlux(
+    public Flux<ApiResponse<OrderResponse>> getOrderAsFlux(
             @PathVariable String id) {
 
-        return orderService.getOrderById(id).flux();
+        return orderService.getOrderById(id)
+                .flux()
+                .map(order ->
+                        new ApiResponse<>(
+                                "Order fetched using Flux successfully",
+                                order
+                        )
+                );
     }
+
 
     @PatchMapping("/{id}/cancel")
     public Mono<ResponseEntity<ApiResponse<OrderResponse>>> cancelOrder(
