@@ -14,14 +14,14 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class ProductServiceClient {
 
-    private final WebClient.Builder webClientBuilder;
+    private final WebClient webClient;
 
     @Value("${product.service.url}")
     private String productServiceUrl;
 
     public Mono<ProductResponse> getProductById(Long productId) {
 
-        return webClientBuilder.build()
+        return webClient
                 .get()
                 .uri(productServiceUrl + "/{id}", productId)
                 .retrieve()
@@ -40,7 +40,7 @@ public class ProductServiceClient {
             Long productId,
             Integer quantity) {
 
-        return webClientBuilder.build()
+        return webClient
                 .patch()
                 .uri(
                         productServiceUrl + "/{id}/reserve/{quantity}",
@@ -63,7 +63,7 @@ public class ProductServiceClient {
             Long productId,
             Integer quantity) {
 
-        return webClientBuilder.build()
+        return webClient
                 .patch()
                 .uri(
                         productServiceUrl + "/{id}/release/{quantity}",

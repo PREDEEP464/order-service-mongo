@@ -14,14 +14,14 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class PaymentServiceClient {
 
-    private final WebClient.Builder webClientBuilder;
+    private final WebClient webClient;
 
     @Value("${payment.service.url}")
     private String paymentServiceUrl;
 
     public Mono<PaymentResponse> getPaymentByOrderId(String orderId) {
 
-        return webClientBuilder.build()
+        return webClient
                 .get()
                 .uri(paymentServiceUrl + "/order/" + orderId)
                 .retrieve()
