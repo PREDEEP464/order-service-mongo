@@ -1,12 +1,15 @@
 package com.reactive.order.serviceImpl;
 
 import com.reactive.order.client.product.ProductServiceClient;
+import com.reactive.order.client.payment.PaymentServiceClient;
+import com.reactive.order.model.entity.response.OrderPaymentResponse;
 import com.reactive.order.dao.api.OrderRepository;
 import com.reactive.order.exception.OrderNotFoundException;
 import com.reactive.order.model.entity.Order;
 import com.reactive.order.model.entity.OrderStatus;
 import com.reactive.order.model.entity.request.OrderRequest;
 import com.reactive.order.model.entity.response.OrderResponse;
+import com.reactive.order.model.entity.response.PaymentResponse;
 import com.reactive.order.model.response.ProductResponse;
 import com.reactive.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +26,7 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductServiceClient productServiceClient;
+    private final PaymentServiceClient paymentServiceClient;
 
     @Override
     public Mono<OrderResponse> createOrder(OrderRequest request) {
@@ -256,6 +260,49 @@ public class OrderServiceImpl implements OrderService {
                 .doOnError(error ->
                         System.err.println(
                                 "Error while marking payment failed: "
+                                        + error.getMessage()
+                        )
+                );
+    }
+
+    @Override
+    public Mono<OrderPaymentResponse> getOrderPaymentDetails(String id) {
+
+        Mono<OrderResponse> orderMono =
+                getOrderById(id);
+
+        Mono<PaymentResponse> paymentMono =
+                paymentServiceClient.getPaymentByOrderId(id);
+
+        return Mono.zip(orderMono, paymentMono)
+                .flatMap(tuple -> {
+
+                    OrderResponse order = tuple.getT1();
+                    PaymentResponse payment = tuple.getT2();
+
+                    return Mono.just(
+                            new OrderPaymentResponse(
+                                    order.getId(),
+                                    order.getCustomerName(),
+                                    order.getProductId(),
+                                    order.getQuantity(),
+                                    order.getTotalAmount(),
+                                    order.getStatus().name(),
+                                    payment.getId(),
+                                    payment.getAmount(),
+                                    payment.getStatus()
+                            )
+                    );
+                })
+                .doOnNext(details ->
+                        System.out.println(
+                                "Order and payment details fetched: "
+                                        + details.getOrderId()
+                        )
+                )
+                .doOnError(error ->
+                        System.err.println(
+                                "Error while fetching order/payment details: "
                                         + error.getMessage()
                         )
                 );

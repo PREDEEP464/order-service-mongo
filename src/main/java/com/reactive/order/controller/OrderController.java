@@ -3,6 +3,7 @@ package com.reactive.order.controller;
 import com.reactive.order.model.entity.request.OrderRequest;
 import com.reactive.order.model.entity.response.ApiResponse;
 import com.reactive.order.model.entity.response.OrderResponse;
+import com.reactive.order.model.entity.response.OrderPaymentResponse;
 import com.reactive.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -113,6 +114,21 @@ public class OrderController {
                                 new ApiResponse<>(
                                         "Order payment marked as failed",
                                         order
+                                )
+                        )
+                );
+    }
+
+    @GetMapping("/{id}/details")
+    public Mono<ResponseEntity<ApiResponse<OrderPaymentResponse>>>
+    getOrderPaymentDetails(@PathVariable String id) {
+
+        return orderService.getOrderPaymentDetails(id)
+                .map(details ->
+                        ResponseEntity.ok(
+                                new ApiResponse<>(
+                                        "Order and payment details fetched successfully",
+                                        details
                                 )
                         )
                 );
