@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 import java.util.List;
 
 @RestController
@@ -63,6 +64,13 @@ public class OrderController {
                                 )
                         )
                 );
+    }
+
+    @GetMapping("/{id}/stream")
+    public Flux<OrderResponse> getOrderAsFlux(
+            @PathVariable String id) {
+
+        return orderService.getOrderById(id).flux();
     }
 
     @PatchMapping("/{id}/cancel")
