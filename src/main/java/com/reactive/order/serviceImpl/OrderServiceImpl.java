@@ -267,7 +267,6 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Mono<OrderPaymentResponse> getOrderPaymentDetails(String id) {
-
         Mono<OrderResponse> orderMono =
                 getOrderById(id);
 
@@ -275,23 +274,21 @@ public class OrderServiceImpl implements OrderService {
                 paymentServiceClient.getPaymentByOrderId(id);
 
         return Mono.zip(orderMono, paymentMono)
-                .flatMap(tuple -> {
+                .map(tuple -> {
 
                     OrderResponse order = tuple.getT1();
                     PaymentResponse payment = tuple.getT2();
 
-                    return Mono.just(
-                            new OrderPaymentResponse(
-                                    order.getId(),
-                                    order.getCustomerName(),
-                                    order.getProductId(),
-                                    order.getQuantity(),
-                                    order.getTotalAmount(),
-                                    order.getStatus().name(),
-                                    payment.getId(),
-                                    payment.getAmount(),
-                                    payment.getStatus()
-                            )
+                    return new OrderPaymentResponse(
+                            order.getId(),
+                            order.getCustomerName(),
+                            order.getProductId(),
+                            order.getQuantity(),
+                            order.getTotalAmount(),
+                            order.getStatus().name(),
+                            payment.getId(),
+                            payment.getAmount(),
+                            payment.getStatus()
                     );
                 })
                 .doOnNext(details ->
@@ -306,6 +303,7 @@ public class OrderServiceImpl implements OrderService {
                                         + error.getMessage()
                         )
                 );
+
     }
 
     private Order buildOrder(
